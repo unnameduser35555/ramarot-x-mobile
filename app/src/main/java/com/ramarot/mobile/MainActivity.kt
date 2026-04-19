@@ -2,6 +2,7 @@ package com.ramarot.mobile
 
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
 import android.widget.Button
@@ -21,10 +22,23 @@ class MainActivity : AppCompatActivity() {
         val stop = findViewById<Button>(R.id.stopButton)
 
         openAccessibility.setOnClickListener {
-            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            // オーバーレイ権限がなければ先に要求
+            if (!Settings.canDrawOverlays(this)) {
+                val intent = Intent(
+                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:$packageName")
+                )
+                startActivity(intent)
+            } else {
+                startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            }
         }
 
         start.setOnClickListener {
+            if (!Settings.canDrawOverlays(this)) {
+                status.text = "先に「アクセシビリティ設定を開く」でオーバーレイ権限を許可してください"
+                return@setOnClickListener
+            }
             prefs.edit().putBoolean(KEY_ENABLED, true).apply()
             status.text = "自動化: ON（Fortniteを前面にしてプレイ画面に移動）"
         }
