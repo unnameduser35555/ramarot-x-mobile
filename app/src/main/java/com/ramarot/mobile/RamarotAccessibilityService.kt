@@ -61,28 +61,32 @@ class RamarotAccessibilityService : AccessibilityService() {
     }
 
     private fun showOverlay() {
-        windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
-        val tv = TextView(this).apply {
-            text = "🟡 起動中"
-            textSize = 14f
-            setTextColor(Color.WHITE)
-            setBackgroundColor(Color.parseColor("#CC000000"))
-            setPadding(20, 10, 20, 10)
+        try {
+            windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+            val tv = TextView(this).apply {
+                text = "🟡 起動中"
+                textSize = 14f
+                setTextColor(Color.WHITE)
+                setBackgroundColor(Color.parseColor("#CC000000"))
+                setPadding(20, 10, 20, 10)
+            }
+            val params = WindowManager.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                        WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+                PixelFormat.TRANSLUCENT
+            ).apply {
+                gravity = Gravity.TOP or Gravity.START
+                x = 20
+                y = 100
+            }
+            windowManager?.addView(tv, params)
+            overlayView = tv
+        } catch (e: Exception) {
+            // オーバーレイ失敗しても動作は継続
         }
-        val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
-            PixelFormat.TRANSLUCENT
-        ).apply {
-            gravity = Gravity.TOP or Gravity.START
-            x = 20
-            y = 100
-        }
-        windowManager?.addView(tv, params)
-        overlayView = tv
     }
 
     private fun removeOverlay() {
