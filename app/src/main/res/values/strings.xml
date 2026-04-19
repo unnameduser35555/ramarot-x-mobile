@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Ramarot Auto</string>
+    <string name="accessibility_desc">ラマロット用の自動タップ支援サービス</string>
+</resources>
