@@ -14,6 +14,8 @@ import android.media.ImageReader
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Build
+import android.os.Handler
+import android.os.HandlerThread
 import android.os.IBinder
 import android.view.WindowManager
 import androidx.core.app.NotificationCompat
@@ -24,6 +26,8 @@ class ScreenCaptureService : Service() {
     private var mediaProjection: MediaProjection? = null
     private var virtualDisplay: VirtualDisplay? = null
     private var imageReader: ImageReader? = null
+    private var handlerThread: HandlerThread? = null
+    private var backgroundHandler: Handler? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -31,6 +35,11 @@ class ScreenCaptureService : Service() {
         super.onCreate()
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, buildNotification())
+
+        handlerThread = HandlerThread("ScreenCapture").also {
+            it.start()
+            backgroundHandler = Handler(it.looper)
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -53,51 +62,47 @@ class ScreenCaptureService : Service() {
         val wm = getSystemService(WINDOW_SERVICE) as WindowManager
         val width: Int
         val height: Int
-        val density: Int
+        val density = resources.displayMetrics.densityDpi
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            val metrics = wm.currentWindowMetrics
-            width = metrics.bounds.width()
-            height = metrics.bounds.height()
-            density = resources.displayMetrics.densityDpi
+            val bounds = wm.currentWindowMetrics.bounds
+            width = bounds.width()
+            height = bounds.height()
         } else {
             val dm = resources.displayMetrics
             width = dm.widthPixels
             height = dm.heightPixels
-            density = dm.densityDpi
         }
 
-        imageReader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2)
+        val reader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2)
+        imageReader = reader
 
-        virtualDisplay = mediaProjection?.createVirtualDisplay(
-            "RamarotCapture",
-            width, height, density,
-            DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-            imageReader?.surface, null, null
-        )
-
-        imageReader?.setOnImageAvailableListener({ reader ->
-            val image = reader.acquireLatestImage() ?: return@setOnImageAvailableListener
+        reader.setOnImageAvailableListener({ r ->
+            val image = r.acquireLatestImage() ?: return@setOnImageAvailableListener
             try {
                 val plane = image.planes[0]
                 val buffer = plane.buffer
                 val pixelStride = plane.pixelStride
                 val rowStride = plane.rowStride
                 val rowPadding = rowStride - pixelStride * image.width
-                val bmp = Bitmap.createBitmap(
-                    image.width + rowPadding / pixelStride,
-                    image.height,
-                    Bitmap.Config.ARGB_8888
-                )
+                val bmpWidth = image.width + rowPadding / pixelStride
+                val bmp = Bitmap.createBitmap(bmpWidth, image.height, Bitmap.Config.ARGB_8888)
                 bmp.copyPixelsFromBuffer(buffer)
-                val cropped = if (rowPadding == 0) bmp
-                else Bitmap.createBitmap(bmp, 0, 0, image.width, image.height)
-                latestBitmap.set(cropped)
+                val result = if (rowPadding == 0) bmp
+                    else Bitmap.createBitmap(bmp, 0, 0, image.width, image.height)
+                latestBitmap.set(result)
             } catch (_: Exception) {
             } finally {
                 image.close()
             }
-        }, null)
+        }, backgroundHandler)
+
+        virtualDisplay = mediaProjection?.createVirtualDisplay(
+            "RamarotCapture",
+            width, height, density,
+            DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+            reader.surface, null, backgroundHandler
+        )
 
         return START_STICKY
     }
@@ -106,6 +111,7 @@ class ScreenCaptureService : Service() {
         virtualDisplay?.release()
         mediaProjection?.stop()
         imageReader?.close()
+        handlerThread?.quitSafely()
         latestBitmap.set(null)
         super.onDestroy()
     }
