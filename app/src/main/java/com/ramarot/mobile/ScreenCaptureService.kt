@@ -15,7 +15,6 @@ import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.IBinder
-import android.util.DisplayMetrics
 import android.view.WindowManager
 import androidx.core.app.NotificationCompat
 import java.util.concurrent.atomic.AtomicReference
@@ -36,8 +35,12 @@ class ScreenCaptureService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val resultCode = intent?.getIntExtra(EXTRA_RESULT_CODE, -1) ?: -1
-        @Suppress("DEPRECATION")
-        val data = intent?.getParcelableExtra<Intent>(EXTRA_DATA)
+        val data = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent?.getParcelableExtra(EXTRA_DATA, Intent::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent?.getParcelableExtra(EXTRA_DATA)
+        }
 
         if (resultCode == -1 || data == null) {
             stopSelf()
@@ -47,13 +50,22 @@ class ScreenCaptureService : Service() {
         val mgr = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         mediaProjection = mgr.getMediaProjection(resultCode, data)
 
-        val metrics = DisplayMetrics()
-        @Suppress("DEPRECATION")
-        (getSystemService(WINDOW_SERVICE) as WindowManager).defaultDisplay.getRealMetrics(metrics)
+        val wm = getSystemService(WINDOW_SERVICE) as WindowManager
+        val width: Int
+        val height: Int
+        val density: Int
 
-        val width = metrics.widthPixels
-        val height = metrics.heightPixels
-        val density = metrics.densityDpi
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val metrics = wm.currentWindowMetrics
+            width = metrics.bounds.width()
+            height = metrics.bounds.height()
+            density = resources.displayMetrics.densityDpi
+        } else {
+            val dm = resources.displayMetrics
+            width = dm.widthPixels
+            height = dm.heightPixels
+            density = dm.densityDpi
+        }
 
         imageReader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2)
 
@@ -78,8 +90,8 @@ class ScreenCaptureService : Service() {
                     Bitmap.Config.ARGB_8888
                 )
                 bmp.copyPixelsFromBuffer(buffer)
-                // 余白をクロップ
-                val cropped = Bitmap.createBitmap(bmp, 0, 0, image.width, image.height)
+                val cropped = if (rowPadding == 0) bmp
+                else Bitmap.createBitmap(bmp, 0, 0, image.width, image.height)
                 latestBitmap.set(cropped)
             } catch (_: Exception) {
             } finally {
@@ -101,9 +113,7 @@ class ScreenCaptureService : Service() {
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
-                CHANNEL_ID,
-                "画面キャプチャ",
-                NotificationManager.IMPORTANCE_LOW
+                CHANNEL_ID, "画面キャプチャ", NotificationManager.IMPORTANCE_LOW
             )
             getSystemService(NotificationManager::class.java)?.createNotificationChannel(channel)
         }
