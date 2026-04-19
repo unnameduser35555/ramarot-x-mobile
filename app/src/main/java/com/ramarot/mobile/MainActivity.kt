@@ -52,19 +52,20 @@ class MainActivity : AppCompatActivity() {
 
         // ② 自動化開始 → オーバーレイ権限 → 画面録画許可 → サービス起動
         start.setOnClickListener {
-            if (!Settings.canDrawOverlays(this)) {
-                startActivity(
-                    Intent(
-                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                        Uri.parse("package:$packageName")
-                    )
-                )
-                status.text = "オーバーレイを許可してからもう一度「自動化開始」を押してください"
-                return@setOnClickListener
-            }
-            val mgr = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-            projectionLauncher.launch(mgr.createScreenCaptureIntent())
-        }
+    if (!Settings.canDrawOverlays(this)) {
+        startActivity(
+            Intent(
+                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                Uri.parse("package:$packageName")
+            )
+        )
+        status.text = "オーバーレイを許可してからもう一度押してください"
+        return@setOnClickListener
+    }
+    status.text = "画面共有ダイアログを開いています..."
+    val mgr = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+    projectionLauncher.launch(mgr.createScreenCaptureIntent())
+}
 
         // ③ 自動化停止
         stop.setOnClickListener {
